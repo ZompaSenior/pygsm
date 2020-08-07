@@ -3,12 +3,12 @@
 # see LICENSE file (it's BSD)
 
 
-from __future__ import with_statement
+
 
 import re, csv, datetime, time
-import errors, message
+from . import errors, message
 import traceback
-import StringIO
+import io
 import threading
 
 # arch: pacman -S python-pyserial
@@ -35,7 +35,7 @@ class GsmModem(object):
       >>> modem.send_sms(*REDACTED*, "Hey, wake up!")
 
       # check for incoming SMS:
-      >>> print modem.next_message()
+      >>> print(modem.next_message())
       <pygsm.IncomingMessage from *REDACTED*: "Leave me alone!">
 
     pyGSM is distributed via GitHub:
@@ -86,7 +86,7 @@ class GsmModem(object):
             # if a device is given, the other args are never
             # used, so were probably included by mistake.
             if len(args) or len(kwargs):
-                raise(TypeError("__init__() does not accept other arguments when a 'device' is given"))
+                raise TypeError
 
         # for regular serial connections, store the connection args, since
         # we might need to recreate the serial connection again later
@@ -137,7 +137,7 @@ class GsmModem(object):
 
     @classmethod
     def debug_logger(cls, modem, msg_str, event_type):
-        print "%8s %s" % (event_type, msg_str)
+        print(("%8s %s" % (event_type, msg_str)))
 
 
     def connect(self, reconnect=False):
@@ -164,7 +164,7 @@ class GsmModem(object):
             # if the connection failed, re-raise the serialexception as
             # a gsm error, so the owner of this object doesn't have to
             # worry about catching anything other than gsm exceptions
-            except serial.SerialException, err:
+            except serial.SerialException as err:
                 msg = str(err)
                 if msg.startswith("could not open port"):
                     pyserial_err, real_err = msg.split(":", 1)
@@ -237,7 +237,7 @@ class GsmModem(object):
         # the various modems more consistant
         self.command("ATE0",      raise_errors=False) # echo off
         self.command("AT+CMEE=1", raise_errors=False) # useful error messages
-        self.command("AT+WIND=0", raise_errors=False) # disable notifications
+        # self.command("AT+WIND=0", raise_errors=False) # disable notifications
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
 
         return self
@@ -270,7 +270,7 @@ class GsmModem(object):
         # if the device couldn't be written to,
         # wrap the error in something that can
         # sensibly be caught at a higher level
-        except OSError, err:
+        except OSError as err:
             raise(errors.GsmWriteError)
 
 
@@ -281,7 +281,7 @@ class GsmModem(object):
         "line") is hit, then return the buffer.
         """
 
-        buffer = []
+        buffer = ""
 
         # if a different timeout was requested just
         # for _this_ read, store and override the
@@ -300,23 +300,24 @@ class GsmModem(object):
         # the default terminator reads
         # until a newline is hit
         if not read_term:
-            read_term = "\r\n"
+            read_term = "\r\n"#.encode("utf-8")
 
         while(True):
             buf = self.device.read()
-            buffer.append(buf)
+            buffer = f"{buffer}{buf.decode('utf-8')}" # .append(buf)
 
             # if a timeout was hit, raise an exception including the raw data that
             # we've already read (in case the calling func was _expecting_ a timeout
             # (wouldn't it be nice if serial.Serial.read returned None for this?)
-            if buf == "":
+            if buf.decode("utf-8") == "":
                 __reset_timeout()
-                raise(errors.GsmReadTimeoutError(buffer))
+                raise (errors.GsmReadTimeoutError(buffer))
 
             # if last n characters of the buffer match the read
             # terminator, return what we've received so far
-            if buffer[-len(read_term)::] == list(read_term):
-                buf_str = "".join(buffer)
+            # print("buffer[-2:]=", buffer[-2:])
+            if buffer[-2:] == read_term:
+                buf_str = buffer #"".join(buffer)
                 __reset_timeout()
 
                 self._log(repr(buf_str), "read")
@@ -342,7 +343,7 @@ class GsmModem(object):
 
             buf = buf.strip()
             buffer.append(buf)
-
+            
             # most commands return OK for success, but there
             # are some exceptions. we're not checking those
             # here (unlike RubyGSM), because they should be
@@ -570,7 +571,8 @@ class GsmModem(object):
                 # issue the command, and wait for the
                 # response
                 with self._modem_lock:
-                    self._write(cmd + write_term)
+                    self._write((cmd + write_term).encode('utf-8'))
+
                     lines = self._wait(
                         read_term=read_term,
                         read_timeout=read_timeout)
@@ -581,7 +583,7 @@ class GsmModem(object):
 
             # Outer handler: if the command caused an error,
             # maybe wrap it and return None
-            except errors.GsmError, err:
+            except errors.GsmError as err:
 
                 # if GSM Error 515 (init or command in progress) was raised,
                 # lock the thread for a short while, and retry. don't lock
@@ -773,7 +775,7 @@ class GsmModem(object):
                 # sms text, wait until it is accepted or rejected
                 # (text-mode messages are terminated with ascii char 26
                 # "SUBSTITUTE" (ctrl+z)), and return True (message sent)
-                except errors.GsmReadTimeoutError, err:
+                except errors.GsmReadTimeoutError as err:
                     if err.pending_data[0] == ">":
                         self.command(text, write_term=chr(26))
                         return True
@@ -786,7 +788,7 @@ class GsmModem(object):
 
             # for all other errors...
             # (likely CMS or CME from device)
-            except Exception, err:
+            except Exception as err:
 
                 # whatever went wrong, break out of the
                 # message prompt. if this is missed, all
@@ -897,7 +899,7 @@ class GsmModem(object):
                 # parse each line into a two-element
                 # array, and cast the result to a dict
                 self._known_networks_cache =\
-                    dict(map(self._csv_str, lines))
+                    dict(list(map(self._csv_str, lines)))
 
             # if anything went wrong (and many things can)
             # during this operation, we will return the empty,
@@ -1054,7 +1056,7 @@ class GsmModem(object):
         while len(lines)>0:
             if m is None:
                 # couldn't match OR no text data following match
-                raise(errors.GsmReadError())
+                raise errors
 
             # if here, we have a match AND text
             # start by popping the header (which we have stored in the 'm'
@@ -1066,7 +1068,7 @@ class GsmModem(object):
 
             # now loop through, popping content until we get
             # the next CMGL or out of lines
-            msg_buf=StringIO.StringIO()
+            msg_buf=io.StringIO()
             while len(lines)>0:
                 m=CMGL_MATCHER.match(lines[0])
                 if m is not None:
@@ -1136,16 +1138,16 @@ if __name__ == "__main__":
         ])
 
         # dump the connection settings
-        print "pyGSM Demo App"
-        print "  Port: %s" % (port)
-        print "  Config: %r" % (conf)
-        print
+        print("pyGSM Demo App")
+        print("  Port: %s" % (port))
+        print("  Config: %r" % (conf))
+        print()
 
         # connect to the modem (this might hang
         # if the connection settings are wrong)
-        print "Connecting to GSM Modem..."
+        print("Connecting to GSM Modem...")
         modem = GsmModem(port=port, **conf).boot()
-        print "Waiting for incoming messages..."
+        print("Waiting for incoming messages...")
 
         # check for new messages every two
         # seconds for the rest of forever
@@ -1155,7 +1157,7 @@ if __name__ == "__main__":
             # we got a message! respond with
             # something useless, as an example
             if msg is not None:
-                print "Got Message: %r" % msg
+                print("Got Message: %r" % msg)
                 msg.respond("Thanks for those %d characters!" %
                     len(msg.text))
 
@@ -1166,4 +1168,4 @@ if __name__ == "__main__":
     # the serial port must be provided
     # we're not auto-detecting, yet
     else:
-        print "Usage: python -m pygsm.gsmmodem PORT [OPTIONS]"
+        print("Usage: python -m pygsm.gsmmodem PORT [OPTIONS]")

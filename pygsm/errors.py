@@ -79,10 +79,10 @@ class GsmModemError(GsmError):
             134: "Service option temporarily out of order",
             148: "unspecified GPRS error",
             149: "PDP authentication failure",
-            150: "Invalid mobile class" },
-
+            150: "Invalid mobile class"
+            },
         "CMS": {
-            021: "Call Rejected (out of credit?)",
+            21: "Call Rejected (out of credit?)",
             301: "SMS service of ME reserved",
             302: "Operation not allowed",
             303: "Operation not supported",
@@ -112,7 +112,9 @@ class GsmModemError(GsmError):
             527: "Please wait, RR or MM is busy. Retry your selection later",
             528: "Location update failure. Emergency calls only",
             529: "PLMN selection failure. Emergency calls only",
-            531: "SMS not send: the <da> is not in FDN phonebook, and FDN lock is enabled (for SMS)" }}
+            531: "SMS not send: the <da> is not in FDN phonebook, and FDN lock is enabled (for SMS)" 
+            }
+        }
 
     def __init__(self, type=None, code=None):
         self.type = type

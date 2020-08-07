@@ -17,11 +17,11 @@ class CountLettersApp(object):
 
     def serve_forever(self):
         while True:
-            print "Checking for message..."
+            print("Checking for message...")
             msg = self.modem.next_message()
 
             if msg is not None:
-                print "Got Message: %r" % (msg)
+                print("Got Message: %r" % (msg))
                 self.incoming(msg)
 
             time.sleep(2)
@@ -34,7 +34,7 @@ gsm = GsmModem(
     logger=GsmModem.debug_logger).boot()
 
 
-print "Waiting for network..."
+print("Waiting for network...")
 s = gsm.wait_for_network()
 
 

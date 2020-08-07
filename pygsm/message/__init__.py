@@ -3,5 +3,5 @@
 # see LICENSE file (it's BSD)
 
 
-from incoming import IncomingMessage
-from outgoing import OutgoingMessage
+from .incoming import IncomingMessage
+from .outgoing import OutgoingMessage
